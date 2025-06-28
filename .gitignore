@@ -1,3 +1,6 @@
+# Books folder (large files for testing)
+Books/
+
 # Dependencies
 node_modules/
 npm-debug.log*

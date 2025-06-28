@@ -30,6 +30,18 @@ const CompareModelsSchema = z.object({
   max_tokens: z.number().optional().default(500).describe("Maximum tokens per response"),
 });
 
+const DocumentAnalysisSchema = z.object({
+  document: z.string().describe("Document content to analyze"),
+  query: z.string().optional().describe("Optional query to focus the analysis"),
+  chunk_size: z.number().optional().default(25000).describe("Size of each chunk in characters"),
+  overlap: z.number().optional().default(2000).describe("Overlap between chunks in characters"),
+  parallel_instances: z.number().optional().default(3).describe("Number of parallel instances (max 5)"),
+  model: z.string().optional().default("google/gemma-3n-e4b-it").describe("Model to use for analysis"),
+  analysis_type: z.enum(["search", "summarize", "extract", "qa"]).optional().default("summarize").describe("Type of analysis to perform"),
+  max_tokens: z.number().optional().default(1000).describe("Maximum tokens per chunk analysis"),
+  temperature: z.number().optional().default(0.3).describe("Temperature for response generation"),
+});
+
 // OpenRouter API configuration
 const OPENROUTER_CONFIG = {
   baseURL: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
@@ -214,6 +226,60 @@ class OpenRouterMCPServer {
               required: ["model"],
             },
           },
+          {
+            name: "analyze_document",
+            description: "Analyze large documents using parallel processing with multiple model instances",
+            inputSchema: {
+              type: "object",
+              properties: {
+                document: {
+                  type: "string",
+                  description: "Document content to analyze",
+                },
+                query: {
+                  type: "string",
+                  description: "Optional query to focus the analysis",
+                },
+                chunk_size: {
+                  type: "number",
+                  description: "Size of each chunk in characters",
+                  default: 25000,
+                },
+                overlap: {
+                  type: "number",
+                  description: "Overlap between chunks in characters",
+                  default: 2000,
+                },
+                parallel_instances: {
+                  type: "number",
+                  description: "Number of parallel instances (max 5)",
+                  default: 3,
+                },
+                model: {
+                  type: "string",
+                  description: "Model to use for analysis",
+                  default: "google/gemma-3n-e4b-it",
+                },
+                analysis_type: {
+                  type: "string",
+                  enum: ["search", "summarize", "extract", "qa"],
+                  description: "Type of analysis to perform",
+                  default: "summarize",
+                },
+                max_tokens: {
+                  type: "number",
+                  description: "Maximum tokens per chunk analysis",
+                  default: 1000,
+                },
+                temperature: {
+                  type: "number",
+                  description: "Temperature for response generation",
+                  default: 0.3,
+                },
+              },
+              required: ["document"],
+            },
+          },
         ],
       };
     });
@@ -232,6 +298,8 @@ class OpenRouterMCPServer {
             return await this.compareModels(CompareModelsSchema.parse(args));
           case "get_model_info":
             return await this.getModelInfo(args as { model: string });
+          case "analyze_document":
+            return await this.analyzeDocument(DocumentAnalysisSchema.parse(args));
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -431,6 +499,298 @@ class OpenRouterMCPServer {
         },
       ],
     };
+  }
+
+  private async analyzeDocument(params: z.infer<typeof DocumentAnalysisSchema>) {
+    const {
+      document,
+      query,
+      chunk_size,
+      overlap,
+      parallel_instances,
+      model,
+      analysis_type,
+      max_tokens,
+      temperature,
+    } = params;
+
+    // Validate parallel instances
+    const instances = Math.min(Math.max(1, parallel_instances), 5);
+
+    // Create chunks with overlap
+    const chunks = this.createDocumentChunks(document, chunk_size, overlap);
+
+    // Process based on analysis type
+    let results;
+    switch (analysis_type) {
+      case "search":
+        results = await this.performSearchAnalysis(chunks, query || "", model, instances, max_tokens, temperature);
+        break;
+      case "extract":
+        results = await this.performExtractionAnalysis(chunks, query || "", model, instances, max_tokens, temperature);
+        break;
+      case "qa":
+        results = await this.performQAAnalysis(chunks, query || "", model, instances, max_tokens, temperature);
+        break;
+      case "summarize":
+      default:
+        results = await this.performSummarizationAnalysis(chunks, query, model, instances, max_tokens, temperature);
+        break;
+    }
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: results,
+        },
+      ],
+    };
+  }
+
+  private createDocumentChunks(document: string, chunkSize: number, overlap: number): Array<{ text: string; index: number; start: number; end: number }> {
+    const chunks: Array<{ text: string; index: number; start: number; end: number }> = [];
+    let start = 0;
+    let index = 0;
+
+    while (start < document.length) {
+      const end = Math.min(start + chunkSize, document.length);
+      chunks.push({
+        text: document.substring(start, end),
+        index,
+        start,
+        end,
+      });
+
+      if (end >= document.length) break;
+      
+      start += chunkSize - overlap;
+      index++;
+    }
+
+    return chunks;
+  }
+
+  private async processChunksInBatches(
+    chunks: Array<{ text: string; index: number; start: number; end: number }>,
+    promptBuilder: (chunk: any) => string,
+    model: string,
+    instances: number,
+    maxTokens: number,
+    temperature: number
+  ): Promise<Array<{ chunk: number; response: string; error?: string }>> {
+    const results: Array<{ chunk: number; response: string; error?: string }> = [];
+    
+    // Process chunks in batches
+    for (let i = 0; i < chunks.length; i += instances) {
+      const batch = chunks.slice(i, i + instances);
+      const promises = batch.map(async (chunk) => {
+        try {
+          const response = await axios.post(
+            `${OPENROUTER_CONFIG.baseURL}/chat/completions`,
+            {
+              model,
+              messages: [{ role: "user", content: promptBuilder(chunk) }],
+              max_tokens: maxTokens,
+              temperature,
+            },
+            { headers: OPENROUTER_CONFIG.headers }
+          );
+          
+          return {
+            chunk: chunk.index,
+            response: response.data.choices[0].message.content,
+          };
+        } catch (error) {
+          return {
+            chunk: chunk.index,
+            response: "",
+            error: error instanceof Error ? error.message : "Unknown error",
+          };
+        }
+      });
+
+      const batchResults = await Promise.all(promises);
+      results.push(...batchResults);
+    }
+
+    return results;
+  }
+
+  private async performSummarizationAnalysis(
+    chunks: Array<{ text: string; index: number; start: number; end: number }>,
+    query: string | undefined,
+    model: string,
+    instances: number,
+    maxTokens: number,
+    temperature: number
+  ): Promise<string> {
+    // Step 1: Summarize each chunk
+    const chunkSummaries = await this.processChunksInBatches(
+      chunks,
+      (chunk) => `Summarize this section of a larger document (section ${chunk.index + 1} of ${chunks.length}):\n\n${chunk.text}\n\n${query ? `Focus on: ${query}` : "Provide a comprehensive summary."}`,
+      model,
+      instances,
+      maxTokens,
+      temperature
+    );
+
+    // Step 2: Combine summaries
+    const combinedSummaries = chunkSummaries
+      .filter(s => !s.error)
+      .map(s => `Section ${s.chunk + 1}: ${s.response}`)
+      .join("\n\n");
+
+    // Step 3: Create final summary
+    const finalSummaryResponse = await axios.post(
+      `${OPENROUTER_CONFIG.baseURL}/chat/completions`,
+      {
+        model,
+        messages: [{
+          role: "user",
+          content: `Create a comprehensive summary by combining these section summaries:\n\n${combinedSummaries}\n\n${query ? `Ensure the summary addresses: ${query}` : "Create a coherent, unified summary."}`
+        }],
+        max_tokens: maxTokens * 2,
+        temperature,
+      },
+      { headers: OPENROUTER_CONFIG.headers }
+    );
+
+    const finalSummary = finalSummaryResponse.data.choices[0].message.content;
+    const errors = chunkSummaries.filter(s => s.error);
+
+    return `📊 **Document Analysis Results**\n\n` +
+      `**Analysis Type:** Summarization\n` +
+      `**Model:** ${model}\n` +
+      `**Document Size:** ${chunks[chunks.length - 1].end.toLocaleString()} characters\n` +
+      `**Chunks Processed:** ${chunks.length}\n` +
+      `**Parallel Instances:** ${instances}\n` +
+      (query ? `**Focus Query:** ${query}\n` : "") +
+      `\n---\n\n` +
+      `**Summary:**\n${finalSummary}\n` +
+      (errors.length > 0 ? `\n⚠️ **Errors:** ${errors.length} chunks failed to process\n` : "");
+  }
+
+  private async performSearchAnalysis(
+    chunks: Array<{ text: string; index: number; start: number; end: number }>,
+    query: string,
+    model: string,
+    instances: number,
+    maxTokens: number,
+    temperature: number
+  ): Promise<string> {
+    if (!query) {
+      throw new Error("Search analysis requires a query");
+    }
+
+    const searchResults = await this.processChunksInBatches(
+      chunks,
+      (chunk) => `Search this document section for information about "${query}":\n\n${chunk.text}\n\nReport any relevant findings with specific quotes and details. If nothing relevant is found, respond with "No relevant information found."`,
+      model,
+      instances,
+      maxTokens,
+      temperature
+    );
+
+    const findings = searchResults
+      .filter(r => !r.error && !r.response.toLowerCase().includes("no relevant information"))
+      .map(r => `**Section ${r.chunk + 1} (chars ${chunks[r.chunk].start}-${chunks[r.chunk].end}):**\n${r.response}`)
+      .join("\n\n");
+
+    return `🔍 **Document Search Results**\n\n` +
+      `**Query:** "${query}"\n` +
+      `**Model:** ${model}\n` +
+      `**Document Size:** ${chunks[chunks.length - 1].end.toLocaleString()} characters\n` +
+      `**Chunks Searched:** ${chunks.length}\n` +
+      `\n---\n\n` +
+      (findings ? findings : "No relevant information found in the document.");
+  }
+
+  private async performExtractionAnalysis(
+    chunks: Array<{ text: string; index: number; start: number; end: number }>,
+    extractionTarget: string,
+    model: string,
+    instances: number,
+    maxTokens: number,
+    temperature: number
+  ): Promise<string> {
+    const target = extractionTarget || "key facts, dates, names, and important information";
+
+    const extractionResults = await this.processChunksInBatches(
+      chunks,
+      (chunk) => `Extract ${target} from this document section:\n\n${chunk.text}\n\nProvide extracted information in a structured format.`,
+      model,
+      instances,
+      maxTokens,
+      temperature
+    );
+
+    // Combine and deduplicate extracted information
+    const combinedResponse = await axios.post(
+      `${OPENROUTER_CONFIG.baseURL}/chat/completions`,
+      {
+        model,
+        messages: [{
+          role: "user",
+          content: `Combine and organize these extracted items, removing duplicates:\n\n${extractionResults.filter(r => !r.error).map(r => r.response).join("\n\n")}\n\nPresent the final extracted information in a clear, organized format.`
+        }],
+        max_tokens: maxTokens * 2,
+        temperature: 0.1,
+      },
+      { headers: OPENROUTER_CONFIG.headers }
+    );
+
+    return `📋 **Document Extraction Results**\n\n` +
+      `**Extraction Target:** ${target}\n` +
+      `**Model:** ${model}\n` +
+      `**Chunks Processed:** ${chunks.length}\n` +
+      `\n---\n\n` +
+      combinedResponse.data.choices[0].message.content;
+  }
+
+  private async performQAAnalysis(
+    chunks: Array<{ text: string; index: number; start: number; end: number }>,
+    questions: string,
+    model: string,
+    instances: number,
+    maxTokens: number,
+    temperature: number
+  ): Promise<string> {
+    if (!questions) {
+      throw new Error("Q&A analysis requires questions");
+    }
+
+    // First, search all chunks for relevant information
+    const qaResults = await this.processChunksInBatches(
+      chunks,
+      (chunk) => `Based on this document section, answer these questions:\n${questions}\n\nDocument section:\n${chunk.text}\n\nProvide specific answers with quotes when possible. If the section doesn't contain relevant information, indicate that.`,
+      model,
+      instances,
+      maxTokens,
+      temperature
+    );
+
+    // Combine answers from all chunks
+    const combinedAnswers = await axios.post(
+      `${OPENROUTER_CONFIG.baseURL}/chat/completions`,
+      {
+        model,
+        messages: [{
+          role: "user",
+          content: `Synthesize these answers into comprehensive responses to the questions:\n\nQuestions:\n${questions}\n\nAnswers from different sections:\n${qaResults.filter(r => !r.error).map((r, i) => `Section ${r.chunk + 1}: ${r.response}`).join("\n\n")}\n\nProvide final, complete answers to each question.`
+        }],
+        max_tokens: maxTokens * 2,
+        temperature,
+      },
+      { headers: OPENROUTER_CONFIG.headers }
+    );
+
+    return `❓ **Document Q&A Results**\n\n` +
+      `**Questions:** ${questions}\n` +
+      `**Model:** ${model}\n` +
+      `**Chunks Analyzed:** ${chunks.length}\n` +
+      `\n---\n\n` +
+      `**Answers:**\n${combinedAnswers.data.choices[0].message.content}`;
   }
 
   async run(): Promise<void> {

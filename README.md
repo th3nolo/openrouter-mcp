@@ -9,6 +9,7 @@ A Model Context Protocol (MCP) server that provides access to OpenRouter's exten
 - 💬 Chat with any model through a unified interface
 - 🔄 Compare responses from multiple models side-by-side
 - 📊 Get detailed model information including context limits and capabilities
+- 📄 **NEW:** Parallel document analysis with smart chunking and synthesis
 - 🔧 Seamless integration with Claude Desktop and Claude Code
 
 ## Installation
@@ -52,6 +53,9 @@ yarn build
   - Parameters: `models[]`, `message`, `max_tokens`
 - **`get_model_info`** - Get detailed information about a specific model
   - Parameters: `model`
+- **`analyze_document`** - Analyze large documents using parallel processing
+  - Parameters: `document`, `query`, `analysis_type` (search/summarize/extract/qa), `chunk_size`, `parallel_instances`
+  - Default model: `google/gemma-3n-e4b-it` (optimized for cost and performance)
 
 ### Available MCP Resources
 
@@ -94,7 +98,20 @@ Once configured, you can use these commands in Claude:
 "Chat with gpt-4 and ask it to explain quantum computing"
 "Compare responses from claude-3-opus and gpt-4 about climate change"
 "Get detailed information about google/gemini-pro"
+"Analyze this document and extract all key dates and milestones"
+"Search this research paper for information about methodology"
+"Summarize this 100-page report focusing on recommendations"
 ```
+
+### Document Analysis Examples
+
+The new `analyze_document` tool supports:
+- **Summarization**: Create comprehensive summaries of large documents
+- **Search**: Find specific information across document sections  
+- **Extraction**: Extract structured data like dates, names, or custom targets
+- **Q&A**: Answer multiple questions about document content
+
+Example: Analyzing a 100K character document costs only ~$0.0005 using Gemma!
 
 ## Development
 
