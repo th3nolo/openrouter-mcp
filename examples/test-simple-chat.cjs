@@ -6,7 +6,7 @@ const server = spawn('node', [serverPath], {
   stdio: ['pipe', 'pipe', 'pipe'],
   env: {
     ...process.env,
-    OPENROUTER_API_KEY: 'REDACTED_API_KEY',
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     OPENROUTER_BASE_URL: 'https://openrouter.ai/api/v1'
   }
 });
