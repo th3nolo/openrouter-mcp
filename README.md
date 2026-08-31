@@ -1,134 +1,146 @@
-# OpenRouter MCP Server
+# OpenRouter MCP server
 
-A Model Context Protocol (MCP) server that provides access to OpenRouter's extensive collection of 400+ AI models through Claude.
+This server gives Claude four OpenRouter tools. Claude can list models, inspect one model, generate a response, or compare models. Three resources expose model metadata, pricing, and API-key usage.
 
-## Features
+Version 2.0 targets MCP `2026-07-28`. Current Claude clients can send stateless requests directly. The SDK fallback still accepts clients that begin with `initialize`.
 
-- 🤖 Access to 400+ language models including GPT-4, Claude, Gemini, Llama, and more
-- 🔍 List and search available models with pricing information
-- 💬 Chat with any model through a unified interface
-- 🔄 Compare responses from multiple models side-by-side
-- 📊 Get detailed model information including context limits and capabilities
-- 🔧 Seamless integration with Claude Desktop and Claude Code
+## What changed in 2.0
 
-## Installation
+- Modern HTTP requests no longer require `initialize`, `notifications/initialized`, `Mcp-Session-Id`, or a GET event stream.
+- `server/discover` reports server capabilities. Every request carries protocol, client, and capability metadata.
+- `serveStdio` negotiates modern or legacy mode on one stdio connection.
+- Each tool has a strict Zod input schema, effect annotations, and structured output.
+- The server passes MCP cancellation to every in-flight OpenRouter request.
+- OpenRouter attribution sends `X-OpenRouter-Title`.
+- `chat_with_model` sends `max_completion_tokens`. It still accepts `max_tokens` as a deprecated alias.
+- `openrouter://usage` calls OpenRouter's current-key endpoint instead of returning placeholder data.
+- `list_models` limits each result page with `limit` and `offset`.
 
-```bash
-# Clone the repository
+See [docs/MCP-2026-07-28.md](docs/MCP-2026-07-28.md) for the wire-level changes.
+
+## Requirements
+
+- Node.js 24 LTS
+- pnpm 12.0.0, exactly as pinned in `package.json`
+- An OpenRouter API key for chat, model comparison, and key-usage data
+
+Model discovery can work without a key. OpenRouter may still apply anonymous limits.
+
+## Install
+
+~~~bash
 git clone https://github.com/th3nolo/openrouter-mcp.git
 cd openrouter-mcp
+pnpm install
+pnpm run check
+~~~
 
-# Install dependencies
-npm install
-# or
-yarn install
+`pnpm-workspace.yaml` waits 72 hours before resolving a release. It also blocks exotic transitive sources and trust downgrades. Only `esbuild@0.28.2` may run a dependency lifecycle script.
 
-# Build the TypeScript code
-npm run build
-# or
-yarn build
-```
+On Windows, `pnpm@12.0.0` does not carry an Authenticode signature. Windows may label it "Unknown publisher." Install it with a method from [pnpm's installation guide](https://pnpm.io/installation), and do not weaken Defender or PowerShell execution policy to suppress the warning.
 
-## Configuration
+Copy `.env.example` to `.env`, then set:
 
-1. Get your OpenRouter API key from [OpenRouter](https://openrouter.ai/keys)
-2. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-3. Edit `.env` and add your API key:
-   ```env
-   OPENROUTER_API_KEY=your_api_key_here
-   ```
+~~~dotenv
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+~~~
 
-## Usage
+Keep `.env` out of Git.
 
-### Available MCP Tools
+## Use with Claude over stdio
 
-- **`list_models`** - Get a list of all available models with pricing
-- **`chat_with_model`** - Send a message to a specific model
-  - Parameters: `model`, `message`, `max_tokens`, `temperature`, `system_prompt`
-- **`compare_models`** - Compare responses from multiple models
-  - Parameters: `models[]`, `message`, `max_tokens`
-- **`get_model_info`** - Get detailed information about a specific model
-  - Parameters: `model`
+`stdio` is the default. Use it for local Claude integrations.
 
-### Available MCP Resources
+~~~bash
+pnpm run build
+claude mcp add --transport stdio --scope user \
+  --env OPENROUTER_API_KEY=your_openrouter_api_key_here \
+  openrouter -- node /absolute/path/to/openrouter-mcp/dist/server.js
+~~~
 
-- **`openrouter://models`** - List of all available models with pricing
-- **`openrouter://pricing`** - Current pricing information for all models
-- **`openrouter://usage`** - Your OpenRouter usage statistics
+The equivalent Claude Desktop configuration is in [examples/claude-config.json](examples/claude-config.json).
 
-### Claude Code Integration
+## Use with Claude over local HTTP
 
-Add the server to Claude Code:
+Start the loopback-only server:
 
-```bash
-claude mcp add openrouter -s user \
-  -e OPENROUTER_API_KEY=your_api_key_here \
-  -- node /path/to/openrouter-mcp/dist/server.js
-```
+~~~bash
+pnpm run build
+OPENROUTER_API_KEY=your_openrouter_api_key_here pnpm run start:http
+~~~
 
-Or add it manually to your Claude Desktop configuration:
+On PowerShell:
 
-```json
-{
-  "mcpServers": {
-    "openrouter": {
-      "command": "node",
-      "args": ["/path/to/openrouter-mcp/dist/server.js"],
-      "env": {
-        "OPENROUTER_API_KEY": "your_api_key_here"
-      }
-    }
-  }
-}
-```
+~~~powershell
+$env:OPENROUTER_API_KEY = "your_openrouter_api_key_here"
+pnpm run start:http
+~~~
 
-## Example Usage
+Then register its URL:
 
-Once configured, you can use these commands in Claude:
+~~~bash
+claude mcp add --transport http --scope user openrouter http://127.0.0.1:3000/mcp
+~~~
 
-```
-"List all available Gemma models"
-"Chat with gpt-4 and ask it to explain quantum computing"
-"Compare responses from claude-3-opus and gpt-4 about climate change"
-"Get detailed information about google/gemini-pro"
-```
+HTTP mode listens only on `127.0.0.1` and validates the `Host` and `Origin` headers. It does not implement a bearer-token shortcut.
+
+Do not expose this listener directly to the internet. Put an HTTPS gateway that implements the MCP OAuth 2.1 resource-server flow in front of it.
+
+## Tools
+
+| Tool | Purpose | External effect |
+| --- | --- | --- |
+| list_models | Search and page through current model metadata | Read-only OpenRouter request |
+| get_model_info | Read one exact model record | Read-only OpenRouter request |
+| chat_with_model | Generate one response | Can consume API credits |
+| compare_models | Generate with two to eight models | Can consume API credits per model |
+
+Each tool returns a text block and `structuredContent`. Zod rejects bad input before the handler runs. The SDK converts upstream failures into MCP tool errors.
+
+## Resources
+
+| URI | Data |
+| --- | --- |
+| openrouter://models | Current model metadata |
+| openrouter://pricing | Current pricing fields |
+| openrouter://usage | Usage and limits for the configured API key |
+
+## Environment
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| OPENROUTER_API_KEY | none | OpenRouter API key |
+| OPENROUTER_BASE_URL | https://openrouter.ai/api/v1 | OpenRouter API base URL |
+| OPENROUTER_SITE_URL | none | Optional HTTP-Referer app attribution |
+| OPENROUTER_APP_NAME | OpenRouter MCP Server | X-OpenRouter-Title attribution |
+| OPENROUTER_TIMEOUT_MS | 60000 | Per-request timeout |
+| MCP_TRANSPORT | stdio | stdio or http |
+| MCP_HTTP_PORT | 3000 | Local HTTP port |
+
+Command-line `--transport` and `--port` values override their environment variables.
 
 ## Development
 
-```bash
-# Run in development mode
-npm run dev
+~~~bash
+pnpm run typecheck
+pnpm run lint
+pnpm run test
+pnpm run build
 
-# Run tests
-npm test
+# Complete release gate
+pnpm run check
+~~~
 
-# Lint code
-npm run lint
+The tests send a `2026-07-28` request without `initialize` and exercise modern negotiation, legacy fallback, structured results, tool errors, and cancellation. They also start the real stdio entry point and inspect the OpenRouter request headers.
 
-# Type check
-npm run typecheck
-```
+## Sources
 
-## Environment Variables
-
-- `OPENROUTER_API_KEY` - Your OpenRouter API key (required)
-- `OPENROUTER_BASE_URL` - API base URL (default: https://openrouter.ai/api/v1)
-- `OPENROUTER_SITE_URL` - Your site URL for API attribution
-- `OPENROUTER_APP_NAME` - Application name for API headers
-
-## Security
-
-- API keys are stored in environment variables only
-- The `.env` file is excluded from version control
-- Never commit your API keys to the repository
+- [MCP 2026-07-28 release](https://blog.modelcontextprotocol.io/posts/2026-07-28/)
+- [MCP 2026-07-28 specification](https://modelcontextprotocol.io/specification/2026-07-28)
+- [Official TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
+- [Claude Code MCP quickstart](https://code.claude.com/docs/en/mcp-quickstart)
+- [OpenRouter API documentation](https://openrouter.ai/docs/api/reference/overview)
 
 ## License
 
 MIT
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.

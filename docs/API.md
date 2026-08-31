@@ -1,115 +1,92 @@
-# OpenRouter MCP Server API Documentation
+# OpenRouter MCP API
 
-## Overview
+The server exposes four tools and three fixed resources. MCP `2026-07-28` clients call them directly. The official SDK fallback handles legacy clients.
 
-This MCP server provides tools and resources for interacting with OpenRouter's unified AI model API, giving you access to 400+ AI models through a single interface.
+## list_models
+
+Search and page through model metadata.
+
+Input:
+
+~~~json
+{
+  "q": "optional text query",
+  "limit": 25,
+  "offset": 0
+}
+~~~
+
+- `q` is optional. The server passes it to OpenRouter's model endpoint.
+- `limit` defaults to 25 and accepts values from 1 through 100.
+- `offset` defaults to 0.
+
+The response's `structuredContent` contains `models`, `total_available`, `returned`, `offset`, and `next_offset`.
+
+## get_model_info
+
+Read the current metadata for one exact model ID.
+
+~~~json
+{
+  "model": "provider/model-id"
+}
+~~~
+
+The handler returns an MCP tool error when the ID does not exist.
+
+## chat_with_model
+
+Generate one response. This call can spend OpenRouter API credits.
+
+~~~json
+{
+  "model": "provider/model-id",
+  "message": "Explain the tradeoff.",
+  "max_completion_tokens": 1000,
+  "temperature": 0.7,
+  "system_prompt": "Optional instruction"
+}
+~~~
+
+- `max_completion_tokens` defaults to 1000.
+- `max_tokens` is a deprecated compatibility alias.
+- `temperature` defaults to 0.7 and accepts values from 0 through 2.
+
+The response's `structuredContent` contains `model`, `response`, and `usage`.
+
+## compare_models
+
+Generate the same prompt with two to eight model IDs. The server makes one OpenRouter request per model, so one tool call can spend credits several times.
+
+~~~json
+{
+  "models": ["provider/model-a", "provider/model-b"],
+  "message": "Compare these options.",
+  "max_completion_tokens": 500
+}
+~~~
+
+The result contains one success or error record per model. Cancelling the MCP call aborts every in-flight request.
 
 ## Resources
 
-### Available Models (`openrouter://models`)
-Returns a comprehensive list of all available models with their specifications.
+### openrouter://models
 
-**Response Format:**
-```json
-{
-  "data": [
-    {
-      "id": "openai/gpt-4",
-      "name": "GPT-4",
-      "description": "OpenAI's most capable model",
-      "context_length": 8192,
-      "pricing": {
-        "prompt": "0.00003",
-        "completion": "0.00006"
-      }
-    }
-  ]
-}
-```
+OpenRouter's current model metadata. The resource declares a private 60-second cache hint.
 
-### Model Pricing (`openrouter://pricing`)
-Returns simplified pricing information for all models.
+### openrouter://pricing
 
-### Usage Statistics (`openrouter://usage`)
-Returns your usage statistics (placeholder - OpenRouter doesn't provide direct usage API).
+Model ID, name, and pricing fields. The resource declares a private 60-second cache hint.
 
-## Tools
+### openrouter://usage
 
-### `list_models`
-Get a formatted list of available OpenRouter models.
+Usage and limits from OpenRouter's current-key endpoint. The resource declares a private five-second cache hint.
 
-**Parameters:** None
+## Errors
 
-**Returns:** Formatted text with model information including ID, name, description, context length, and pricing.
-
-### `chat_with_model`
-Send a message to a specific OpenRouter model.
-
-**Parameters:**
-- `model` (string, required): OpenRouter model ID (e.g., "openai/gpt-4")
-- `message` (string, required): Message to send to the model
-- `max_tokens` (number, optional): Maximum tokens in response (default: 1000)
-- `temperature` (number, optional): Temperature for response randomness (default: 0.7)
-- `system_prompt` (string, optional): System prompt for the conversation
-
-**Returns:** Model response with usage statistics.
-
-### `compare_models`
-Compare responses from multiple models using the same prompt.
-
-**Parameters:**
-- `models` (array of strings, required): Array of model IDs to compare
-- `message` (string, required): Message to send to all models
-- `max_tokens` (number, optional): Maximum tokens per response (default: 500)
-
-**Returns:** Formatted comparison showing each model's response.
-
-### `get_model_info`
-Get detailed information about a specific model.
-
-**Parameters:**
-- `model` (string, required): Model ID to get information about
-
-**Returns:** Complete model specification including capabilities, pricing, and limits.
-
-## Error Handling
-
-All tools and resources include comprehensive error handling:
-- API key validation
-- Rate limit handling
-- Model availability checks
-- Network error recovery
-
-## Usage Examples
-
-### Chat with GPT-4
-```json
-{
-  "name": "chat_with_model",
-  "arguments": {
-    "model": "openai/gpt-4",
-    "message": "Explain quantum computing in simple terms",
-    "max_tokens": 500
-  }
-}
-```
-
-### Compare Multiple Models
-```json
-{
-  "name": "compare_models",
-  "arguments": {
-    "models": ["openai/gpt-4", "anthropic/claude-3-sonnet", "google/gemini-pro"],
-    "message": "What is the meaning of life?",
-    "max_tokens": 300
-  }
-}
-```
-
-## Configuration
-
-Required environment variables:
-- `OPENROUTER_API_KEY`: Your OpenRouter API key
-- `OPENROUTER_BASE_URL`: OpenRouter API base URL (default: https://openrouter.ai/api/v1)
-- `OPENROUTER_SITE_URL`: Your site URL for OpenRouter attribution
-- `OPENROUTER_APP_NAME`: Your app name for OpenRouter attribution
+- Zod validates tool input before the handler runs.
+- The SDK returns validation and upstream exceptions with `isError` set.
+- Resource failures are protocol errors.
+- `OpenRouterClient` truncates upstream error messages to 1,000 characters.
+- The server never includes API keys in tool results or errors.
+- Each upstream request has a timeout and receives the MCP cancellation signal.

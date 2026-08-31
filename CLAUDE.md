@@ -1,78 +1,36 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Commands
 
-## Development Commands
+Use the project-pinned `pnpm@12.0.0`. Change dependencies only when the task requires it.
 
-```bash
-# Development with hot reload
-npm run dev
+~~~bash
+pnpm run typecheck
+pnpm run lint
+pnpm run test
+pnpm run build
+pnpm run check
+~~~
 
-# Production build  
-npm run build
+`pnpm start` runs the default stdio server. `pnpm run start:http` runs the loopback HTTP server.
 
-# Run production server
-npm start
+## Code map
 
-# Run tests (Jest framework)
-npm test
+- `src/openrouter.ts` builds OpenRouter requests, validates responses, applies timeouts, and forwards cancellation.
+- `src/mcp.ts` registers tools and resources, then creates the dual-era MCP handler.
+- `src/server.ts` starts the stdio or loopback HTTP transport.
+- `tests/mcp.test.ts` covers modern stateless HTTP, legacy fallback, stdio negotiation, failures, cancellation, and OpenRouter request shape.
 
-# Lint TypeScript code
-npm run lint
-```
+The server implements MCP `2026-07-28` with `@modelcontextprotocol/server@2.0.0`. Use `createMcpHandler` for HTTP and `serveStdio` for stdio. Do not connect a legacy transport directly.
 
-## Environment Setup
+## Safety boundaries
 
-Copy `.env.example` to `.env` and configure:
-- `OPENROUTER_API_KEY` - Required for OpenRouter API access
-- `OPENROUTER_BASE_URL` - Defaults to https://openrouter.ai/api/v1
-- `OPENROUTER_SITE_URL` - Your site URL for API attribution
-- `OPENROUTER_APP_NAME` - Application name for API headers
+- `stdout` belongs to MCP while stdio is active. Log only to `stderr`.
+- Keep HTTP bound to `127.0.0.1` and retain `Host` and `Origin` validation.
+- Do not claim static bearer-token checking is MCP OAuth.
+- Pass `ctx.mcpReq.signal` to every upstream call.
+- Chat and comparison can consume paid OpenRouter credits; their annotations must not describe them as read-only or idempotent.
+- Never include OpenRouter credentials in output or errors.
+- Do not add live paid API calls to tests.
 
-## Architecture Overview
-
-This is a **Model Context Protocol (MCP) server** written in TypeScript that provides Claude access to 400+ AI models through OpenRouter's API.
-
-### Core Architecture
-
-**Single-file implementation**: `src/server.ts` contains the complete `OpenRouterMCPServer` class
-
-**MCP Tools Provided**:
-- `list_models` - Get available OpenRouter models
-- `chat_with_model` - Send messages to specific models  
-- `compare_models` - Compare responses from multiple models
-- `get_model_info` - Get detailed model information
-
-**MCP Resources Exposed**:
-- `model_pricing` - Pricing information for models
-- `model_capabilities` - Model capabilities and features
-- `usage_stats` - Usage statistics (placeholder)
-
-### Key Dependencies
-
-- `@modelcontextprotocol/sdk` - MCP protocol implementation
-- `axios` - HTTP client for OpenRouter API
-- `zod` - Runtime type validation and schemas
-- `dotenv` - Environment variable management
-
-### Testing
-
-- **Framework**: Jest (configured but no tests implemented yet)
-- **Setup**: Dependencies must be installed first (`npm install`)
-- **ES Modules**: Requires TypeScript + ESM Jest configuration
-
-### Claude Desktop Integration
-
-Use `examples/claude-config.json` as a template for Claude Desktop MCP server configuration. The server communicates via stdio transport following MCP protocol standards.
-
-## Code Patterns
-
-- **Schema-first design**: All API requests/responses validated with Zod schemas
-- **Error handling**: Comprehensive try-catch blocks around external API calls
-- **Async/await**: Consistent async pattern with Promise.all for parallel requests
-- **Environment-based config**: Secure API key management through environment variables
-
-## Development Best Practices
-
-- Remember to always use yarn to install run dependencies.
-- For build and run command as well use yarn
+See `docs/MCP-2026-07-28.md` for the exact protocol changes.

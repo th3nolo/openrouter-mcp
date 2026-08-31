@@ -2,11 +2,10 @@
   "mcpServers": {
     "openrouter": {
       "command": "node",
-      "args": ["/home/th3nolo/openrouter-mcp/dist/server.js"],
+      "args": ["/absolute/path/to/openrouter-mcp/dist/server.js", "--transport", "stdio"],
       "env": {
         "OPENROUTER_API_KEY": "your_openrouter_api_key_here",
         "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1",
-        "OPENROUTER_SITE_URL": "http://localhost:3000",
         "OPENROUTER_APP_NAME": "OpenRouter MCP Server"
       }
     }
