@@ -4,6 +4,7 @@ import * as z from "zod/v4";
 import {
   OpenRouterClient,
   openRouterModelSchema,
+  openRouterPricingSchema,
   type OpenRouterApi,
   type OpenRouterModel,
 } from "./openrouter.js";
@@ -11,8 +12,6 @@ import {
 export const SERVER_NAME = "openrouter-mcp-server";
 export const SERVER_VERSION = "2.0.0";
 
-const pricingValueSchema = z.union([z.string(), z.number(), z.null()]);
-const pricingSchema = z.record(z.string(), pricingValueSchema);
 const usageSchema = z.record(z.string(), z.unknown()).nullable();
 
 const modelSummarySchema = z.object({
@@ -20,7 +19,7 @@ const modelSummarySchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
   context_length: z.number().int().nonnegative().optional(),
-  pricing: pricingSchema.optional(),
+  pricing: openRouterPricingSchema.optional(),
 });
 
 const listModelsInputSchema = z

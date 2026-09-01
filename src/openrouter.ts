@@ -1,6 +1,41 @@
 import * as z from "zod/v4";
 
-const pricingValueSchema = z.union([z.string(), z.number(), z.null()]);
+const priceSchema = z.string();
+
+const pricingOverrideSchema = z
+  .object({
+    audio: priceSchema.optional(),
+    completion: priceSchema.optional(),
+    input_audio_cache: priceSchema.optional(),
+    input_cache_read: priceSchema.optional(),
+    input_cache_write: priceSchema.optional(),
+    input_cache_write_1h: priceSchema.optional(),
+    min_prompt_tokens: z.number().int().nonnegative().optional(),
+    prompt: priceSchema.optional(),
+    utc_days: z.array(z.string()).optional(),
+    utc_end: z.number().int().nonnegative().optional(),
+    utc_start: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+
+export const openRouterPricingSchema = z
+  .object({
+    audio: priceSchema.optional(),
+    audio_output: priceSchema.optional(),
+    completion: priceSchema.optional(),
+    image: priceSchema.optional(),
+    image_output: priceSchema.optional(),
+    input_audio_cache: priceSchema.optional(),
+    input_cache_read: priceSchema.optional(),
+    input_cache_write: priceSchema.optional(),
+    input_cache_write_1h: priceSchema.optional(),
+    internal_reasoning: priceSchema.optional(),
+    overrides: z.array(pricingOverrideSchema).optional(),
+    prompt: priceSchema.optional(),
+    request: priceSchema.optional(),
+    web_search: priceSchema.optional(),
+  })
+  .strict();
 
 export const openRouterModelSchema = z
   .object({
@@ -8,7 +43,7 @@ export const openRouterModelSchema = z
     name: z.string().optional(),
     description: z.string().optional(),
     context_length: z.number().int().nonnegative().optional(),
-    pricing: z.record(z.string(), pricingValueSchema).optional(),
+    pricing: openRouterPricingSchema.optional(),
   })
   .passthrough();
 

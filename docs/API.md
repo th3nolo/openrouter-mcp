@@ -76,7 +76,7 @@ OpenRouter's current model metadata. The resource declares a private 60-second c
 
 ### openrouter://pricing
 
-Model ID, name, and pricing fields. The resource declares a private 60-second cache hint.
+Model ID, name, and pricing fields, including token-, time-, and cache-specific pricing overrides. The resource declares a private 60-second cache hint.
 
 ### openrouter://usage
 

@@ -16,13 +16,30 @@ import {
   type OpenRouterModel,
 } from "../src/openrouter.js";
 
+const pricingWithOverrides: NonNullable<OpenRouterModel["pricing"]> = {
+  prompt: "0.000001",
+  completion: "0.000002",
+  overrides: [
+    {
+      utc_days: ["saturday", "sunday"],
+      prompt: "0.0000005",
+      completion: "0.000001",
+    },
+    {
+      min_prompt_tokens: 100_000,
+      input_cache_read: "0.0000001",
+      input_cache_write: "0.0000002",
+    },
+  ],
+};
+
 class FakeOpenRouterApi implements OpenRouterApi {
   readonly models: OpenRouterModel[] = [
     {
       id: "example/alpha",
       name: "Alpha",
       context_length: 32_000,
-      pricing: { prompt: "0.000001", completion: "0.000002" },
+      pricing: pricingWithOverrides,
     },
     {
       id: "example/beta",
@@ -114,7 +131,7 @@ test("serves MCP 2026-07-28 directly with structured, annotated tools", async (c
         id: "example/alpha",
         name: "Alpha",
         context_length: 32_000,
-        pricing: { prompt: "0.000001", completion: "0.000002" },
+        pricing: pricingWithOverrides,
       },
     ],
     total_available: 2,
@@ -128,6 +145,32 @@ test("serves MCP 2026-07-28 directly with structured, annotated tools", async (c
     arguments: { limit: 0 },
   });
   assert.equal(invalid.isError, true);
+});
+
+test("preserves pricing override arrays in model and pricing resources", async (context) => {
+  const { client, handler } = await connectHttp(new FakeOpenRouterApi());
+  context.after(async () => {
+    await client.close();
+    await handler.close();
+  });
+
+  const modelsResult = await client.readResource({ uri: "openrouter://models" });
+  const modelsContent = modelsResult.contents[0];
+  assert.ok(modelsContent && "text" in modelsContent);
+  const modelsPayload = JSON.parse(modelsContent.text) as {
+    data: Array<{ id: string; pricing?: NonNullable<OpenRouterModel["pricing"]> }>;
+  };
+  assert.equal(modelsPayload.data[0]?.id, "example/alpha");
+  assert.deepEqual(modelsPayload.data[0]?.pricing, pricingWithOverrides);
+
+  const pricingResult = await client.readResource({ uri: "openrouter://pricing" });
+  const pricingContent = pricingResult.contents[0];
+  assert.ok(pricingContent && "text" in pricingContent);
+  const pricingPayload = JSON.parse(pricingContent.text) as {
+    data: Array<{ id: string; pricing?: NonNullable<OpenRouterModel["pricing"]> }>;
+  };
+  assert.equal(pricingPayload.data[0]?.id, "example/alpha");
+  assert.deepEqual(pricingPayload.data[0]?.pricing, pricingWithOverrides);
 });
 
 test("accepts a conformant modern tools/list request without initialize or session state", async () => {
@@ -324,6 +367,51 @@ test("uses current OpenRouter headers and max_completion_tokens", async () => {
   const requestBody = JSON.parse(String(capturedInit?.body)) as Record<string, unknown>;
   assert.equal(requestBody.max_completion_tokens, 321);
   assert.equal("max_tokens" in requestBody, false);
+});
+
+test("accepts current pricing override arrays from the models endpoint", async () => {
+  const fetchImpl = (async (): Promise<Response> =>
+    new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: "example/overridden",
+            name: "Overridden pricing model",
+            pricing: pricingWithOverrides,
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof globalThis.fetch;
+  const client = new OpenRouterClient({
+    baseUrl: "https://openrouter.example/api/v1",
+    fetch: fetchImpl,
+  });
+
+  const models = await client.listModels();
+  assert.equal(models[0]?.id, "example/overridden");
+  assert.deepEqual(models[0]?.pricing, pricingWithOverrides);
+});
+
+test("rejects malformed pricing override containers", async () => {
+  const fetchImpl = (async (): Promise<Response> =>
+    new Response(
+      JSON.stringify({
+        data: [
+          {
+            id: "example/malformed",
+            pricing: { prompt: "0", completion: "0", overrides: { prompt: "0" } },
+          },
+        ],
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    )) as typeof globalThis.fetch;
+  const client = new OpenRouterClient({
+    baseUrl: "https://openrouter.example/api/v1",
+    fetch: fetchImpl,
+  });
+
+  await assert.rejects(client.listModels());
 });
 
 test("surfaces bounded OpenRouter HTTP errors without leaking request credentials", async () => {
