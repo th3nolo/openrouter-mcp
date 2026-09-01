@@ -28,9 +28,9 @@ async function main(): Promise<void> {
   }
 
   if (transport === "stdio") {
-    const handle = serveStdio(() => createOpenRouterMcpServer(api));
+    const handle = serveStdio(() => createOpenRouterMcpServer(api), { legacy: "reject" });
     installShutdown(() => handle.close());
-    console.error("OpenRouter MCP server listening on stdio (MCP 2026-07-28 with legacy fallback).");
+    console.error("OpenRouter MCP server listening on stdio (MCP 2026-07-28 only).");
     return;
   }
 
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
   console.error(
     "OpenRouter MCP server listening on http://127.0.0.1:" +
       port +
-      "/mcp (MCP 2026-07-28 with legacy fallback).",
+      "/mcp (MCP 2026-07-28 only).",
   );
 }
 

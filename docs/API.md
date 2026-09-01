@@ -1,6 +1,6 @@
 # OpenRouter MCP API
 
-The server exposes four tools and three fixed resources. MCP `2026-07-28` clients call them directly. The official SDK fallback handles legacy clients.
+The server exposes four tools and three fixed resources. MCP `2026-07-28` clients call them directly. The server rejects legacy `initialize` clients.
 
 ## list_models
 

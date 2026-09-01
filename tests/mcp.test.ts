@@ -64,17 +64,26 @@ class FakeOpenRouterApi implements OpenRouterApi {
   }
 }
 
-async function connectHttp(api: OpenRouterApi, mode: "auto" | "legacy" = "auto") {
+async function connectHttp(api: OpenRouterApi) {
   const handler = createOpenRouterMcpHandler(api);
   const transport = new StreamableHTTPClientTransport(new URL("http://test.local/mcp"), {
     fetch: (url, init) => handler.fetch(new Request(url, init)),
   });
   const client = new Client(
     { name: "openrouter-mcp-test", version: "1.0.0" },
-    { versionNegotiation: { mode } },
+    { versionNegotiation: { mode: { pin: "2026-07-28" } } },
   );
   await client.connect(transport);
   return { client, handler };
+}
+
+function createStdioTransport(): StdioClientTransport {
+  return new StdioClientTransport({
+    command: process.execPath,
+    args: ["--import", "tsx", path.resolve("src/server.ts"), "--transport", "stdio"],
+    cwd: process.cwd(),
+    stderr: "pipe",
+  });
 }
 
 test("serves MCP 2026-07-28 directly with structured, annotated tools", async (context) => {
@@ -164,16 +173,22 @@ test("accepts a conformant modern tools/list request without initialize or sessi
   }
 });
 
-test("retains the legacy initialization path for older Claude clients", async (context) => {
-  const { client, handler } = await connectHttp(new FakeOpenRouterApi(), "legacy");
-  context.after(async () => {
-    await client.close();
-    await handler.close();
+test("rejects legacy initialization over HTTP", async () => {
+  const handler = createOpenRouterMcpHandler(new FakeOpenRouterApi());
+  const transport = new StreamableHTTPClientTransport(new URL("http://test.local/mcp"), {
+    fetch: (url, init) => handler.fetch(new Request(url, init)),
   });
+  const client = new Client(
+    { name: "openrouter-legacy-http-test", version: "1.0.0" },
+    { versionNegotiation: { mode: "legacy" } },
+  );
 
-  assert.equal(client.getProtocolEra(), "legacy");
-  const listed = await client.listTools();
-  assert.ok(listed.tools.some((tool) => tool.name === "chat_with_model"));
+  try {
+    await assert.rejects(client.connect(transport));
+  } finally {
+    await client.close().catch(() => undefined);
+    await handler.close();
+  }
 });
 
 test("converts upstream tool failures into MCP tool errors", async (context) => {
@@ -239,20 +254,9 @@ test("forwards MCP cancellation to the in-flight OpenRouter operation", async (c
 test("negotiates the modern protocol over the real stdio entry point", async () => {
   const client = new Client(
     { name: "openrouter-stdio-test", version: "1.0.0" },
-    { versionNegotiation: { mode: "auto" } },
+    { versionNegotiation: { mode: { pin: "2026-07-28" } } },
   );
-  const transport = new StdioClientTransport({
-    command: process.execPath,
-    args: [
-      "--import",
-      "tsx",
-      path.resolve("src/server.ts"),
-      "--transport",
-      "stdio",
-    ],
-    cwd: process.cwd(),
-    stderr: "pipe",
-  });
+  const transport = createStdioTransport();
 
   try {
     await client.connect(transport);
@@ -261,6 +265,20 @@ test("negotiates the modern protocol over the real stdio entry point", async () 
     assert.ok(listed.tools.some((tool) => tool.name === "get_model_info"));
   } finally {
     await client.close();
+  }
+});
+
+test("rejects legacy initialization over the real stdio entry point", { timeout: 5_000 }, async () => {
+  const client = new Client(
+    { name: "openrouter-legacy-stdio-test", version: "1.0.0" },
+    { versionNegotiation: { mode: "legacy" } },
+  );
+  const transport = createStdioTransport();
+
+  try {
+    await assert.rejects(client.connect(transport));
+  } finally {
+    await client.close().catch(() => undefined);
   }
 });
 

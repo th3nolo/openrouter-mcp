@@ -121,7 +121,7 @@ export function createOpenRouterMcpServer(api: OpenRouterApi = OpenRouterClient.
 }
 
 export function createOpenRouterMcpHandler(api: OpenRouterApi = OpenRouterClient.fromEnvironment()) {
-  return createMcpHandler(() => createOpenRouterMcpServer(api));
+  return createMcpHandler(() => createOpenRouterMcpServer(api), { legacy: "reject" });
 }
 
 function registerResources(server: McpServer, api: OpenRouterApi): void {

@@ -2,13 +2,13 @@
 
 This server gives Claude four OpenRouter tools. Claude can list models, inspect one model, generate a response, or compare models. Three resources expose model metadata, pricing, and API-key usage.
 
-Version 2.0 targets MCP `2026-07-28`. Current Claude clients can send stateless requests directly. The SDK fallback still accepts clients that begin with `initialize`.
+Version 2.0 targets MCP `2026-07-28` only. Current Claude clients can send stateless requests directly. The server rejects clients that begin with the legacy `initialize` handshake.
 
 ## What changed in 2.0
 
-- Modern HTTP requests no longer require `initialize`, `notifications/initialized`, `Mcp-Session-Id`, or a GET event stream.
+- Modern HTTP requests do not use `initialize`, `notifications/initialized`, `Mcp-Session-Id`, or a GET event stream. Legacy openings are rejected.
 - `server/discover` reports server capabilities. Every request carries protocol, client, and capability metadata.
-- `serveStdio` negotiates modern or legacy mode on one stdio connection.
+- `serveStdio` pins each accepted stdio connection to MCP `2026-07-28` and rejects legacy mode.
 - Each tool has a strict Zod input schema, effect annotations, and structured output.
 - The server passes MCP cancellation to every in-flight OpenRouter request.
 - OpenRouter attribution sends `X-OpenRouter-Title`.
@@ -131,7 +131,7 @@ pnpm run build
 pnpm run check
 ~~~
 
-The tests send a `2026-07-28` request without `initialize` and exercise modern negotiation, legacy fallback, structured results, tool errors, and cancellation. They also start the real stdio entry point and inspect the OpenRouter request headers.
+The tests send a `2026-07-28` request without `initialize` and exercise strict legacy rejection, structured results, tool errors, and cancellation. They also start the real stdio entry point and inspect the OpenRouter request headers.
 
 ## Sources
 
