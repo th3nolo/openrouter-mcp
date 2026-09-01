@@ -1,16 +1,23 @@
 {
   "name": "openrouter-mcp-server",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Stateless MCP 2026-07-28 server for OpenRouter",
   "main": "dist/server.js",
+  "bin": {
+    "openrouter-mcp": "dist/cli.js",
+    "openrouter-mcp-server": "dist/server.js"
+  },
+  "files": ["dist", "docs", "examples", ".env.example", "README.md"],
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts --transport stdio",
     "dev:http": "tsx watch src/server.ts --transport http",
     "build": "tsc",
+    "cli": "tsx src/cli.ts",
     "start": "node dist/server.js",
     "start:http": "node dist/server.js --transport http",
     "test": "tsx --test tests/*.test.ts",
+    "test:live": "tsx tests/live-contract.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "lint": "eslint src tests --ext .ts --max-warnings 0",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build"
