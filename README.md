@@ -4,6 +4,8 @@ This project connects agents to OpenRouter through two front doors: an agent-fir
 
 Version 3.0 targets MCP `2026-07-28` only. Each HTTP POST is independent. The server does not accept `initialize`, create `Mcp-Session-Id` sessions, expose a GET event stream, or run a legacy fallback.
 
+Design notes and the reasoning behind the stateless `2026-07-28` surface are in the engineering note [Building a strict stateless MCP 2026-07-28 server for OpenRouter](https://th3nolo.com/articles/openrouter-stateless-mcp-2026-07-28). More notes and case studies: [th3nolo.com](https://th3nolo.com). Author: Manuel Parra.
+
 ## What changed in 3.0
 
 - `list_models` sends pagination, filters, and sorting to OpenRouter instead of downloading the full catalog.
