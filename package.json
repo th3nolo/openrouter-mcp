@@ -16,11 +16,13 @@
     "cli": "tsx src/cli.ts",
     "start": "node dist/server.js",
     "start:http": "node dist/server.js --transport http",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "node tests/run-offline.mjs",
     "test:live": "tsx tests/live-contract.ts",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
-    "lint": "eslint src tests --ext .ts --max-warnings 0",
-    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build"
+    "lint": "eslint src tests --ext .ts,.mjs --max-warnings 0",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run test && pnpm run build",
+    "test:smoke": "node tests/run-offline.mjs tests/packaged-smoke.ts",
+    "test:live:public": "tsx --test tests/public-live.ts"
   },
   "keywords": ["mcp", "openrouter", "ai", "claude", "model-context-protocol"],
   "license": "MIT",

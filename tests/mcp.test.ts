@@ -330,6 +330,7 @@ function createStdioTransport(): StdioClientTransport {
     args: ["--import", "tsx", path.resolve("src/server.ts"), "--transport", "stdio"],
     cwd: process.cwd(),
     stderr: "pipe",
+    env: { NODE_OPTIONS: process.env.NODE_OPTIONS ?? "" },
   });
 }
 
@@ -339,6 +340,7 @@ function createCliStdioTransport(): StdioClientTransport {
     args: ["--import", "tsx", path.resolve("src/cli.ts"), "serve", "--transport", "stdio"],
     cwd: process.cwd(),
     stderr: "pipe",
+    env: { NODE_OPTIONS: process.env.NODE_OPTIONS ?? "" },
   });
 }
 
@@ -1263,21 +1265,3 @@ test("surfaces bounded OpenRouter HTTP errors without leaking request credential
       !error.message.includes("credential-that-must-not-appear"),
   );
 });
-
-test(
-  "matches the live public OpenRouter catalog contract",
-  { skip: process.env.OPENROUTER_LIVE_TEST !== "1", timeout: 20_000 },
-  async () => {
-    const client = OpenRouterClient.fromEnvironment();
-    const page = await client.listModels({ limit: 2, offset: 0, sort: "newest" });
-    assert.equal(page.models.length, 2);
-    assert.ok(page.totalCount >= page.models.length);
-    const first = page.models[0];
-    assert.ok(first);
-    const model = await client.getModel(first.id);
-    assert.equal(model.id, first.id);
-    const endpoints = await client.getModelEndpoints(first.id);
-    assert.equal(endpoints.id, first.id);
-    assert.ok(Array.isArray(endpoints.endpoints));
-  },
-);

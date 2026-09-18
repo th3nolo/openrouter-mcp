@@ -44,3 +44,6 @@ temp/
 
 # Keep .env.example
 !.env.example
+# Local packaged contract smoke
+contract-package.tgz
+.contract-*/

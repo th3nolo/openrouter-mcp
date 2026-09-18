@@ -173,11 +173,19 @@ pnpm run lint
 pnpm run test
 pnpm run build
 
-# Complete release gate
+# Complete offline source gate
 pnpm run check
+
+# Build first, then verify the packed distribution
+pnpm pack --out contract-package.tgz
+pnpm run test:smoke
 ~~~
 
-The deterministic tests cover modern HTTP without `initialize`, strict legacy rejection, real stdio negotiation, CLI schema output, cache hints, credential separation, upstream and local pagination, direct API routes, generation handles, comparison concurrency, cancellation, schema drift, bounded errors, and HTTPS enforcement. The live contract test is separate because it depends on current network and OpenRouter availability.
+The deterministic tests cover modern HTTP without `initialize`, strict legacy rejection, real stdio negotiation, CLI schema output, cache hints, credential separation, upstream and local pagination, direct API routes, generation handles, comparison concurrency, cancellation, schema drift, bounded errors, and HTTPS enforcement. The live contract tests are separate because they depend on current network and OpenRouter availability. `pnpm run test:live:public` runs the public catalog regression; `pnpm run test:live` runs the broader live contract described above. Missing credentials remain reported as skipped by the live report, never as passed. Neither live command runs in application CI.
+
+`.github/workflows/application.yml` runs `pnpm run check` and the packed-distribution smoke test on pushes and pull requests with Node `24.19.0`, pnpm `12.0.0`, immutable action references, and a frozen lockfile. GitHub default-setup CodeQL remains a separate security check. The repository has no configured formatter; CI checks whitespace and the existing ESLint rules.
+
+The offline runner refuses a checkout containing `.env`, removes inherited OpenRouter settings, and preloads a network-denial guard in the tests and their stdio children. Setting `OPENROUTER_LIVE_TEST` no longer enables live requests in `pnpm test`. The packed smoke suite extracts the actual tarball and uses its declared CLI/server entrypoints with the real SDK client; it checks modern discovery, strict legacy rejection, invalid tool/CLI input, stdout framing, EOF and process shutdown. Dependencies resolve from the frozen checkout, so this is packaged-entrypoint evidence, not a clean consumer install or live OpenRouter acceptance. TAP output reports test/pass/fail/skip counts separately for each offline suite.
 
 ## Sources
 
