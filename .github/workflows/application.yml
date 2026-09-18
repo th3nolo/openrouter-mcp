@@ -1,0 +1,41 @@
+name: Application CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: application-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check and packaged contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 24.19.0
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 12.0.0
+          run_install: false
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck, lint, offline tests, and build
+        run: pnpm run check
+      - name: Pack the actual distribution
+        run: pnpm pack --out contract-package.tgz
+      - name: Exercise packaged stdio and CLI contracts offline
+        run: pnpm run test:smoke
+      - name: Verify lockfile and whitespace
+        run: |
+          git diff --exit-code -- pnpm-lock.yaml
+          git show --format= --check HEAD
