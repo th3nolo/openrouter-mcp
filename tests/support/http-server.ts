@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { once } from "node:events";
+import { readFileSync } from "node:fs";
 import { request } from "node:http";
 import { createServer } from "node:net";
 
@@ -119,4 +120,40 @@ async function findFreePort(): Promise<number> {
     throw new Error("Could not read the probe port.");
   }
   return address.port;
+}
+
+// Reads the Linux kernel socket tables and returns every local address listening on the port.
+// Returns undefined on systems without /proc/net/tcp, so callers can skip.
+export function listeningAddresses(port: number): string[] | undefined {
+  let tables: Array<[string, (hex: string) => string]>;
+  try {
+    tables = [
+      [readFileSync("/proc/net/tcp", "utf8"), decodeIpv4],
+      [readFileSync("/proc/net/tcp6", "utf8"), decodeIpv6],
+    ];
+  } catch {
+    return undefined;
+  }
+  const listenState = "0A";
+  const addresses: string[] = [];
+  for (const [table, decode] of tables) {
+    for (const line of table.trim().split("\n").slice(1)) {
+      const [, local, , state] = line.trim().split(/\s+/);
+      const [addressHex, portHex] = (local ?? "").split(":");
+      if (state === listenState && addressHex && portHex && Number.parseInt(portHex, 16) === port) {
+        addresses.push(decode(addressHex));
+      }
+    }
+  }
+  return addresses;
+}
+
+// /proc stores each 32-bit word in host byte order (little-endian on x64 and arm64).
+function decodeIpv4(hex: string): string {
+  return (hex.match(/../g) ?? []).reverse().map((byte) => Number.parseInt(byte, 16)).join(".");
+}
+
+function decodeIpv6(hex: string): string {
+  const bytes = (hex.match(/.{8}/g) ?? []).flatMap((word) => (word.match(/../g) ?? []).reverse());
+  return (bytes.join("").match(/.{4}/g) ?? []).join(":");
 }
