@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createServer } from "node:http";
+import { createServer, type Server } from "node:http";
 import { pathToFileURL } from "node:url";
 
 import { localhostHostValidation, localhostOriginValidation, toNodeHandler } from "@modelcontextprotocol/node";
@@ -79,11 +79,20 @@ export async function runServer(
     });
     await handler.close();
   });
+  // Report the address the socket actually bound to, so the log cannot claim loopback when it is not.
   console.error(
-    "OpenRouter MCP server listening on http://127.0.0.1:" +
-      port +
+    "OpenRouter MCP server listening on http://" +
+      formatBoundAddress(httpServer.address()) +
       "/mcp (MCP 2026-07-28 only).",
   );
+}
+
+function formatBoundAddress(address: ReturnType<Server["address"]>): string {
+  if (address === null || typeof address === "string") {
+    return String(address);
+  }
+  const host = address.family === "IPv6" ? "[" + address.address + "]" : address.address;
+  return host + ":" + address.port;
 }
 
 function readTransport(argumentsList: string[], environment: NodeJS.ProcessEnv): Transport {

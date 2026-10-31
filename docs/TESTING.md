@@ -29,7 +29,7 @@ In-process tests call `handler.fetch()` directly. They do not go through `src/se
 2. **Modern handshake.** A client pinned to `2026-07-28` connects, and `tools/list` returns the exact tool names.
 3. **Legacy rejection.** A client in `legacy` mode fails to connect.
 4. **Transport boundaries.**
-   - HTTP: 404 outside `/mcp`, 403 for a foreign Host, 403 for a foreign Origin, 200 for loopback origins, no `Mcp-Session-Id`.
+   - HTTP: listens only on `127.0.0.1` (checked in `/proc/net/tcp` and `/proc/net/tcp6` on Linux, skipped elsewhere), 404 outside `/mcp`, 403 for a foreign Host, 403 for a foreign Origin, 200 for loopback origins, no `Mcp-Session-Id`.
    - Stdio: malformed JSON returns JSON-RPC errors and does not corrupt stdout.
 5. **Shutdown.** SIGTERM (HTTP) or EOF (stdio) exits with code 0 and frees the port or process.
 

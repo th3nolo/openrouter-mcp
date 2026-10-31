@@ -43,7 +43,7 @@ When a value must survive between requests, the server returns an explicit handl
 ## Transports
 
 - **Stdio** is the default. Stdout carries only MCP messages, and all logs go to stderr.
-- **HTTP** binds only to `127.0.0.1` and serves only `POST /mcp`. `GET /mcp` returns 405, and any other path returns 404. The Host and Origin headers must be loopback values, otherwise the server returns 403. Responses carry no `Mcp-Session-Id`.
+- **HTTP** binds only to `127.0.0.1` and serves only `POST /mcp`. The listening line reports the address the socket actually bound to. `GET /mcp` returns 405, and any other path returns 404. The Host and Origin headers must be loopback values, otherwise the server returns 403. Responses carry no `Mcp-Session-Id`.
 
 The HTTP transport is for local use. It has no TLS, OAuth, reverse-proxy trust, multi-tenant authorization or public ingress. A remote deployment needs those at a separate boundary.
 
@@ -114,5 +114,4 @@ Clients should discover tools and resources at runtime instead of assuming the o
 - No test proves a successful inference-key or management-key flow. The live contract (`pnpm run test:live`) needs real keys and is not part of CI.
 - No paid chat call runs in tests. The no-retry rule for paid calls is covered by code and offline tests only.
 - The server is tested with the official MCP client package, not with every Claude desktop, web or Code release.
-- The HTTP tests do not prove that the server binds only to `127.0.0.1`. The listening line is fixed text, and the offline guard stops a test from reaching the server on another address.
 - The package is not published to npm. The name `openrouter-mcp-server` on npm belongs to a different project.

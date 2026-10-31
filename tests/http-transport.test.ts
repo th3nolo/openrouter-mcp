@@ -5,6 +5,7 @@ import test, { after, before } from "node:test";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 
 import {
+  listeningAddresses,
   modernToolsListBody,
   modernToolsListHeaders,
   rawRequest,
@@ -37,9 +38,21 @@ after(async () => {
   await server.stop();
 });
 
-test("logs the loopback listening address to stderr and keeps stdout empty", () => {
-  assert.match(server.stderr(), /listening on http:\/\/127\.0\.0\.1:\d+\/mcp \(MCP 2026-07-28 only\)/);
+test("logs the bound loopback address to stderr and keeps stdout empty", () => {
+  assert.ok(
+    server.stderr().includes("listening on http://127.0.0.1:" + server.port + "/mcp (MCP 2026-07-28 only)"),
+    server.stderr(),
+  );
   assert.equal(server.stdout(), "");
+});
+
+test("listens only on 127.0.0.1 according to the kernel socket table", (context) => {
+  const addresses = listeningAddresses(server.port);
+  if (addresses === undefined) {
+    context.skip("needs /proc/net/tcp (Linux)");
+    return;
+  }
+  assert.deepEqual(addresses, ["127.0.0.1"]);
 });
 
 test("serves every tool over the real HTTP entry point with the pinned modern protocol", async () => {
