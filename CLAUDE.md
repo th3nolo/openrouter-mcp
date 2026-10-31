@@ -37,4 +37,4 @@ The server implements only MCP `2026-07-28` with `@modelcontextprotocol/server@2
 - Never include OpenRouter credentials in output or errors.
 - Do not add live paid API calls to tests.
 
-See `docs/MCP-2026-07-28.md` for the exact protocol changes.
+See `docs/MCP-2026-07-28.md` for the exact protocol changes and `docs/DESIGN.md` for the reasons behind the current design.
