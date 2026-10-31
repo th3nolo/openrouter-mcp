@@ -116,8 +116,8 @@ importers:
         specifier: 2.4.0
         version: 2.4.0
       dotenv:
-        specifier: 17.4.2
-        version: 17.4.2
+        specifier: 18.0.9
+        version: 18.0.9
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -502,9 +502,10 @@ packages:
   deep-is@0.1.4:
     resolution: {integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==}
 
-  dotenv@17.4.2:
-    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
+  dotenv@18.0.9:
+    resolution: {integrity: sha512-3fVOW4cB02R066PUSwn8O4TJyz9NckQl7F81blIbaq9jKBm2tSmOKky7ZHIXzGvkVPXCSn6jkpziBPZdGFs8Tw==}
     engines: {node: '>=12'}
+    hasBin: true
 
   esbuild@0.28.2:
     resolution: {integrity: sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA==}
@@ -1089,7 +1090,7 @@ snapshots:
 
   deep-is@0.1.4: {}
 
-  dotenv@17.4.2: {}
+  dotenv@18.0.9: {}
 
   esbuild@0.28.2:
     optionalDependencies:
