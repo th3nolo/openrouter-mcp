@@ -25,7 +25,7 @@ Design notes and the reasoning behind the stateless `2026-07-28` surface are in 
 - Model comparisons run at most three OpenRouter calls at once. Paid calls are never retried automatically.
 - Custom OpenRouter base URLs must use HTTPS. Plain HTTP is accepted only for loopback development.
 
-See [docs/API.md](docs/API.md) for the complete tool contract, [docs/CLI.md](docs/CLI.md) for direct CLI use, and [docs/MCP-2026-07-28.md](docs/MCP-2026-07-28.md) for wire-level behavior.
+See [docs/API.md](docs/API.md) for the complete tool contract, [docs/CLI.md](docs/CLI.md) for direct CLI use, [docs/MCP-2026-07-28.md](docs/MCP-2026-07-28.md) for wire-level behavior, and [docs/DESIGN.md](docs/DESIGN.md) for the design decisions and their reasons.
 
 ## Requirements
 
