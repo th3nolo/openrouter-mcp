@@ -45,6 +45,8 @@ pnpm install
 pnpm run check
 ~~~
 
+The project uses pnpm only. `package.json` declares `devEngines.packageManager` as `pnpm@12.0.0` with `onFail: "error"`, so `npm install`, `npm ci` and `npm run` stop with `EBADDEVENGINES`.
+
 `pnpm-workspace.yaml` waits 72 hours before resolving a release. It also blocks exotic transitive sources and trust downgrades. Only `esbuild@0.28.2` may run a dependency lifecycle script.
 
 On Windows, `pnpm@12.0.0` does not carry an Authenticode signature. Windows may label it "Unknown publisher." Install it with a method from [pnpm's installation guide](https://pnpm.io/installation), and do not weaken Defender or PowerShell execution policy to suppress the warning.
