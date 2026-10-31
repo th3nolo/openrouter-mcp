@@ -19,9 +19,13 @@ pnpm run check
 - `src/openrouter.ts` builds OpenRouter requests, validates responses, applies timeouts, and forwards cancellation.
 - `src/mcp.ts` registers tools and resources, then creates the strict MCP `2026-07-28` handler.
 - `src/server.ts` starts the stdio or loopback HTTP transport.
-- `tests/mcp.test.ts` covers modern stateless HTTP, legacy rejection, stdio negotiation, failures, cancellation, and OpenRouter request shape.
+- `tests/mcp.test.ts` covers the in-process MCP handler: stateless requests, legacy rejection, failures, cancellation, and OpenRouter request shape.
+- `tests/stdio-transport.test.ts` and `tests/http-transport.test.ts` start the real entry points, one suite per transport.
+- `tests/packaged-smoke.ts` checks the packed tarball over both transports.
 
-The server implements only MCP `2026-07-28` with `@modelcontextprotocol/server@2.0.0`. Pass `{ legacy: "reject" }` to both `createMcpHandler` and `serveStdio`. Do not restore the SDK's default legacy fallback.
+Follow `docs/TESTING.md` when adding or changing tests.
+
+The server implements only MCP `2026-07-28` with `@modelcontextprotocol/server@2.4.0`. Pass `{ legacy: "reject" }` to both `createMcpHandler` and `serveStdio`. Do not restore the SDK's default legacy fallback.
 
 ## Safety boundaries
 

@@ -5,8 +5,10 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import test, { after } from "node:test";
 
-import { Client } from "@modelcontextprotocol/client";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+
+import { rawRequest, startHttpServer } from "./support/http-server.js";
 
 const timeout = 5_000;
 const temporary = mkdtempSync(path.resolve(".contract-"));
@@ -92,6 +94,34 @@ for (const [name, entry, args] of [
   });
 }
 
+for (const [name, entryArgs] of [
+  ["server", [server]],
+  ["CLI serve", [cli, "serve"]],
+] as const) {
+  test(`packaged ${name}: loopback HTTP discovery, boundaries, and SIGTERM`, { timeout: 15_000 }, async () => {
+    const running = await startHttpServer([...entryArgs], packaged);
+    try {
+      const client = new Client({ name: "packaged-http-contract", version: "1.0.0" }, {
+        versionNegotiation: { mode: { pin: "2026-07-28" } },
+      });
+      try {
+        await client.connect(new StreamableHTTPClientTransport(running.url));
+        assert.equal(client.getProtocolEra(), "modern");
+        const tools = await client.listTools();
+        assert.equal(tools.tools.length, 13);
+      } finally {
+        await client.close();
+      }
+      assert.equal((await rawRequest(running.port, { path: "/other" })).status, 404);
+      assert.equal((await rawRequest(running.port, { method: "POST", headers: { Host: "evil.example" } })).status, 403);
+    } finally {
+      assert.equal(await running.stop(), 0);
+    }
+    assert.equal(running.stdout(), "");
+    assert.doesNotMatch(running.stderr(), /Offline test attempted network access/);
+  });
+}
+
 test("packaged CLI schema, version, and help exit successfully", () => {
   const schema = run(cli, ["schema"]);
   assert.equal(schema.status, 0, schema.stderr);
@@ -125,8 +155,15 @@ test("packaged server invalid transport exits one", () => {
   assert.match(result.stderr, /MCP transport must be either stdio or http/);
 });
 
-test("offline guard blocks fetch and socket requests in child processes", () => {
-  for (const code of ["fetch('https://openrouter.ai/api/v1/models')", "import('node:net').then(n => n.connect(443, 'openrouter.ai'))"]) {
+test("offline guard blocks non-loopback fetch and socket requests in child processes", () => {
+  for (const code of [
+    "fetch('https://openrouter.ai/api/v1/models')",
+    "import('node:net').then(n => n.connect(443, 'openrouter.ai'))",
+    "fetch('http://localhost:9/')",
+    "fetch('http://10.0.0.1/')",
+    "import('node:net').then(n => n.connect(9, 'localhost'))",
+    "import('node:net').then(n => n.connect(443, '10.0.0.1'))",
+  ]) {
     const result = run("--eval", [code]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Offline test attempted network access/);
